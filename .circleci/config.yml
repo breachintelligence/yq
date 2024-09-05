@@ -1,0 +1,79 @@
+version: 2.1
+
+executors:
+  ubuntu-executor:
+    docker:
+      - image: cimg/go:1.22
+    working_directory: ~/repo
+
+  macos-executor:
+    macos:
+      xcode: "13.4.1"
+    working_directory: ~/repo
+
+orbs:
+  go: circleci/go@1.11.0
+  aws-cli: circleci/aws-cli@5.1.0
+
+jobs:
+  build-ubuntu:
+    executor: ubuntu-executor
+    steps:
+      - checkout
+      - aws-cli/install
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y zip
+      - run:
+          name: Build binary
+          command: |
+            CGO_ENABLED=0 go build
+      - run:
+          name: Upload to S3
+          command: |
+            aws s3 cp yq s3://polarityio-prod-builds/yq/ubuntu/yq
+
+  build-macos-x64:
+    executor: macos-executor
+    steps:
+      - checkout
+      - go/install:
+          version: 1.22.7
+      - aws-cli/install
+      - run:
+          name: Build binary
+          command: |
+            go mod download gopkg.in/yaml.v2
+            CGO_ENABLED=0 go build
+      - run:
+          name: Upload to S3
+          command: |
+            aws s3 cp yq s3://polarityio-prod-builds/yq/macos/x64/yq
+
+  build-macos-arm64:
+    executor: macos-executor
+    steps:
+      - checkout
+      - go/install:
+          version: 1.22.7
+      - aws-cli/install
+      - run:
+          name: Build binary
+          command: |
+            export GOARCH=arm64
+            CGO_ENABLED=0 go build
+      - run:
+          name: Upload to S3
+          command: |
+            aws s3 cp yq s3://polarityio-prod-builds/yq/macos/arm64/yq
+
+
+workflows:
+  version: 2
+  build-and-upload:
+    jobs: 
+      - build-ubuntu
+      - build-macos-x64
+      - build-macos-arm64
